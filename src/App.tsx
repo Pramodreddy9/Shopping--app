@@ -10,15 +10,21 @@ import { OrderHistoryView } from './components/OrderHistoryView';
 import { PersonalizedRecommendations } from './components/PersonalizedRecommendations';
 import { AiSupportDrawer } from './components/AiSupportDrawer';
 import { SetupGuideModal } from './components/SetupGuideModal';
-import { Product, CartItem, Order } from './types';
-import { getProducts } from './lib/supabase';
-import { Sparkles, Shield, ArrowUpRight, HelpCircle } from 'lucide-react';
+import { AuthModal } from './components/AuthModal';
+import { Product, CartItem, Order, User } from './types';
+import { getProducts, getStoredUser, signOutUser } from './lib/supabase';
+import { Sparkles, ArrowUpRight, LogIn } from 'lucide-react';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<'catalog' | 'tracking' | 'history' | 'recommendations'>('catalog');
   const [products, setProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<User | null>(() => getStoredUser());
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
 
   // Modals & Drawers state
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -100,13 +106,40 @@ export default function App() {
     setIsCartOpen(true);
   };
 
+  const handleSignOut = async () => {
+    await signOutUser();
+    setCurrentUser(null);
+  };
+
+  const handleOpenAuth = (mode: 'signin' | 'signup' = 'signin') => {
+    setAuthMode(mode);
+    setIsAuthOpen(true);
+  };
+
   const totalCartCount = cartItems.reduce((acc, curr) => acc + curr.quantity, 0);
 
   return (
     <div className="min-h-screen bg-[#fcfcfc] text-slate-900 flex flex-col selection:bg-slate-900 selection:text-white">
-      {/* Top Banner (Quiet promotional announcement) */}
-      <div className="bg-slate-900 text-slate-100 text-[11px] font-mono py-1.5 px-4 text-center border-b border-slate-800">
-        <span>Complimentary Express Courier on orders over $150 · Use code <strong>WELCOME10</strong> for 10% off</span>
+      {/* Top Banner (Promotional & Account prompt) */}
+      <div className="bg-slate-900 text-slate-100 text-[11px] font-mono py-1.5 px-4 flex justify-between items-center border-b border-slate-800">
+        <span className="truncate">
+          Complimentary Express Delivery over $150 · Use code <strong>WELCOME10</strong>
+        </span>
+        <div className="hidden sm:flex items-center gap-3 shrink-0">
+          {currentUser ? (
+            <span className="text-emerald-400 font-mono">
+              Signed in as {currentUser.fullName}
+            </span>
+          ) : (
+            <button
+              onClick={() => handleOpenAuth('signin')}
+              className="text-slate-300 hover:text-white underline cursor-pointer flex items-center gap-1"
+            >
+              <LogIn className="w-3 h-3" />
+              <span>Customer Sign In</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Primary Top Bar */}
@@ -114,9 +147,12 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         cartCount={totalCartCount}
+        currentUser={currentUser}
         onOpenCart={() => setIsCartOpen(true)}
         onOpenAiSupport={() => setIsAiOpen(true)}
         onOpenSetupGuide={() => setIsSetupOpen(true)}
+        onOpenAuth={() => handleOpenAuth('signin')}
+        onSignOut={handleSignOut}
         isAiOpen={isAiOpen}
       />
 
@@ -190,6 +226,16 @@ export default function App() {
         </button>
       </div>
 
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        initialMode={authMode}
+        onAuthSuccess={(user) => {
+          setCurrentUser(user);
+        }}
+      />
+
       {/* Modals & Slide-over Drawers */}
       <ProductDetailModal
         product={selectedProduct}
@@ -216,6 +262,7 @@ export default function App() {
         items={cartItems}
         discount={activeDiscount}
         appliedCoupon={appliedCoupon}
+        currentUser={currentUser}
         onOrderPlaced={handleOrderPlaced}
       />
 
@@ -243,7 +290,23 @@ export default function App() {
             <span>Contemporary Commerce &amp; Real-Time Order Intelligence</span>
           </div>
 
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-6">
+            {!currentUser ? (
+              <button
+                onClick={() => handleOpenAuth('signin')}
+                className="text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 cursor-pointer"
+              >
+                <span>Customer Login</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleSignOut}
+                className="text-rose-600 hover:text-rose-700 transition-colors cursor-pointer"
+              >
+                <span>Sign Out ({currentUser.fullName})</span>
+              </button>
+            )}
+
             <button
               onClick={() => setIsSetupOpen(true)}
               className="text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 cursor-pointer"
@@ -251,6 +314,7 @@ export default function App() {
               <span>Supabase &amp; Vercel Deployment Checklist</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
+
             <button
               onClick={() => setIsAiOpen(true)}
               className="text-slate-600 hover:text-slate-900 transition-colors flex items-center gap-1 cursor-pointer"

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { X, Lock, CreditCard, CheckCircle2, ShieldCheck, Truck, Loader2 } from 'lucide-react';
-import { CartItem, PaymentMethodType, ShippingAddress, Order } from '../types';
+import { CartItem, PaymentMethodType, ShippingAddress, Order, User } from '../types';
 import { createOrder } from '../lib/supabase';
 
 interface CheckoutModalProps {
@@ -9,6 +9,7 @@ interface CheckoutModalProps {
   items: CartItem[];
   discount: number;
   appliedCoupon: string;
+  currentUser?: User | null;
   onOrderPlaced: (order: Order) => void;
 }
 
@@ -17,6 +18,7 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   onClose,
   items,
   discount,
+  currentUser,
   onOrderPlaced,
 }) => {
   const [step, setStep] = useState<'shipping' | 'payment' | 'processing'>('shipping');
@@ -25,22 +27,27 @@ export const CheckoutModal: React.FC<CheckoutModalProps> = ({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Shipping Form State
-  const [shipping, setShipping] = useState<ShippingAddress>({
-    fullName: 'Eleanor Vance',
-    email: 'eleanor.vance@studio.design',
-    phone: '+1 (555) 234-8910',
-    street: '742 Evergreen Terrace',
-    apartment: 'Apt 4B',
-    city: 'Portland',
-    state: 'OR',
-    postalCode: '97201',
-    country: 'United States',
+  const [shipping, setShipping] = useState<ShippingAddress>(() => {
+    if (currentUser?.defaultShippingAddress) {
+      return { ...currentUser.defaultShippingAddress };
+    }
+    return {
+      fullName: currentUser?.fullName || 'Eleanor Vance',
+      email: currentUser?.email || 'eleanor.vance@studio.design',
+      phone: currentUser?.phone || '+1 (555) 234-8910',
+      street: '742 Evergreen Terrace',
+      apartment: 'Apt 4B',
+      city: 'Portland',
+      state: 'OR',
+      postalCode: '97201',
+      country: 'United States',
+    };
   });
 
   // Card details state
   const [cardData, setCardData] = useState({
     cardNumber: '4242 •••• •••• 4242',
-    cardName: 'Eleanor Vance',
+    cardName: currentUser?.fullName || 'Eleanor Vance',
     expiry: '12/28',
     cvv: '884',
   });

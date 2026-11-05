@@ -1,5 +1,5 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { Product, Order, OrderStatus, TrackingMilestone } from '../types';
+import { Product, Order, OrderStatus, TrackingMilestone, User } from '../types';
 import { INITIAL_PRODUCTS } from './products';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -17,6 +17,26 @@ export const isSupabaseConfigured = (): boolean => {
 // Local storage storage keys
 const LOCAL_STORAGE_ORDERS_KEY = 'aura_orders_store_v1';
 const LOCAL_STORAGE_PRODUCTS_KEY = 'aura_products_store_v1';
+const LOCAL_STORAGE_USER_KEY = 'aura_auth_user_v1';
+
+export const DEMO_USER: User = {
+  id: 'usr-9281',
+  email: 'eleanor.vance@studio.design',
+  fullName: 'Eleanor Vance',
+  phone: '+1 (555) 234-8910',
+  defaultShippingAddress: {
+    fullName: 'Eleanor Vance',
+    email: 'eleanor.vance@studio.design',
+    phone: '+1 (555) 234-8910',
+    street: '742 Evergreen Terrace',
+    apartment: 'Apt 4B',
+    city: 'Portland',
+    state: 'OR',
+    postalCode: '97201',
+    country: 'United States'
+  },
+  createdAt: '2026-01-15T10:00:00.000Z'
+};
 
 // Seed demo orders for immediate rich experience
 const INITIAL_DEMO_ORDERS: Order[] = [
@@ -436,3 +456,134 @@ function mapSupabaseOrderToModel(data: any): Order {
     trackingMilestones: Array.isArray(data.tracking_milestones) ? data.tracking_milestones : []
   };
 }
+
+// -------------------------------------------------------------
+// Authentication Operations (Supabase Auth + High-Fidelity Local Fallback)
+// -------------------------------------------------------------
+
+export function getStoredUser(): User | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_USER_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveStoredUser(user: User | null) {
+  try {
+    if (user) {
+      localStorage.setItem(LOCAL_STORAGE_USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(LOCAL_STORAGE_USER_KEY);
+    }
+  } catch (e) {
+    console.error('Failed to update auth storage', e);
+  }
+}
+
+export async function signInUser(email: string, password: string):Promise<{ user: User | null; error: string | null }> {
+  // Try Supabase Auth first if configured
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (error) {
+        return { user: null, error: error.message };
+      }
+      if (data.user) {
+        const authedUser: User = {
+          id: data.user.id,
+          email: data.user.email || email,
+          fullName: data.user.user_metadata?.full_name || email.split('@')[0],
+          createdAt: data.user.created_at,
+          defaultShippingAddress: data.user.user_metadata?.shipping_address,
+        };
+        saveStoredUser(authedUser);
+        return { user: authedUser, error: null };
+      }
+    } catch (err: any) {
+      console.warn('Supabase auth sign in error, checking local store', err);
+    }
+  }
+
+  // Local/demo fallback
+  if (email.toLowerCase() === DEMO_USER.email.toLowerCase()) {
+    saveStoredUser(DEMO_USER);
+    return { user: DEMO_USER, error: null };
+  }
+
+  if (password.length >= 6) {
+    const fallbackUser: User = {
+      id: `usr-${Date.now()}`,
+      email,
+      fullName: email.split('@')[0].replace(/[._]/g, ' '),
+      createdAt: new Date().toISOString(),
+    };
+    saveStoredUser(fallbackUser);
+    return { user: fallbackUser, error: null };
+  }
+
+  return { user: null, error: 'Password must be at least 6 characters.' };
+}
+
+export async function signUpUser(fullName: string, email: string, password: string): Promise<{ user: User | null; error: string | null }> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName }
+        }
+      });
+      if (error) {
+        return { user: null, error: error.message };
+      }
+      if (data.user) {
+        const newUser: User = {
+          id: data.user.id,
+          email: data.user.email || email,
+          fullName: fullName,
+          createdAt: data.user.created_at,
+        };
+        saveStoredUser(newUser);
+        return { user: newUser, error: null };
+      }
+    } catch (err: any) {
+      console.warn('Supabase sign up error, fallback to local', err);
+    }
+  }
+
+  if (password.length < 6) {
+    return { user: null, error: 'Password must be at least 6 characters.' };
+  }
+
+  const newUser: User = {
+    id: `usr-${Date.now()}`,
+    email,
+    fullName,
+    createdAt: new Date().toISOString(),
+  };
+  saveStoredUser(newUser);
+  return { user: newUser, error: null };
+}
+
+export async function signOutUser(): Promise<void> {
+  if (supabase) {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.warn('Supabase sign out error', e);
+    }
+  }
+  saveStoredUser(null);
+}
+
+export function signInDemoUser(): User {
+  saveStoredUser(DEMO_USER);
+  return DEMO_USER;
+}
+

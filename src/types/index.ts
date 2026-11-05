@@ -106,3 +106,14 @@ export interface ChatMessage {
     payload: string;
   }[];
 }
+
+export interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  phone?: string;
+  avatarUrl?: string;
+  defaultShippingAddress?: ShippingAddress;
+  createdAt: string;
+}
+
