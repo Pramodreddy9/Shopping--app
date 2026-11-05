@@ -1,0 +1,6 @@
+{
+  "name": "AURA | Contemporary Commerce & Live Order Intelligence",
+  "description": "Premium shopping application featuring catalog management, live stock availability, secure checkout, real-time courier order tracking, purchase history, personalized recommendations, and Gemini-powered customer support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
